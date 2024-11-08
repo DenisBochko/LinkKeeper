@@ -76,7 +76,7 @@ func getMe(APIURL string) (bool, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
 		return false, err
 	}
-	// fmt.Println(user)
+
 	return true, nil
 }
 

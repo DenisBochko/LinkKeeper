@@ -3,7 +3,7 @@
 CREATE TABLE sources
 (
     id SERIAL PRIMARY KEY,
-    user_name VARCHAR(255) NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
     user_url VARCHAR(255) NOT NULL
 );
 -- +goose StatementEnd
