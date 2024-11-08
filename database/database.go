@@ -1,11 +1,17 @@
-package main
+package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
 	_ "github.com/lib/pq"
 )
+
+type DataBase struct {
+	ConnStr    string
+	DriverName string
+}
 
 type Field struct {
 	ID      int
@@ -13,37 +19,51 @@ type Field struct {
 	UserURL string
 }
 
-func main() {
-	connStr := "user=postgres dbname=LinkKeeper password=postgres host=localhost sslmode=disable"
-	db, err := sql.Open("postgres", connStr)
+// connStr := "user=postgres dbname=LinkKeeper password=postgres host=localhost sslmode=disable"
+// driver = "postgres"
+
+func (d DataBase) Start(ctx context.Context, saveChan, getChan, deleteChan <-chan Field, receive chan<- []Field) {
+	db, err := sql.Open(d.DriverName, d.ConnStr)
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
+	defer close(receive)
 
-	// Вставка данных
-	id, _ := Save(db, "88888", "https://axaxaxax.com")
-	fmt.Println(id)
-
-	// userID, userURL, err := Get(db, "1234")
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Println(userID, userURL)
-
-	fields2, err := GetAllFields(db)
-	if err != nil {
-		panic(err)
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("database: Закрываем соединение с БД")
+			break loop
+		case field := <-saveChan:
+			_, err := d.Save(db, field.UserID, field.UserURL)
+			if err != nil {
+				fmt.Printf("database: Не удалось сохранить запись пользователя: %s \n", field.UserID)
+			} else {
+				fmt.Printf("database: Удалось сохранить запись пользователя: %s \n", field.UserID)
+			}
+		case field := <-getChan:
+			fields, err := d.GetAllFieldsOfUserID(db, field.UserID)
+			if err != nil {
+				fmt.Printf("database: Не удалось получить запись пользователя: %s \n", field.UserID)
+			} else {
+				fmt.Printf("database: Удалось получить запись пользователя: %s \n", field.UserID)
+			}
+			receive <- fields
+		case field := <-deleteChan:
+			count, err := d.Delete(db, field.UserID)
+			if err != nil {
+				fmt.Printf("database: Не удалось удалить запись пользователя: %s \n", field.UserID)
+			} else {
+				fmt.Printf("database: Удалось удалить %d записей пользователя: %s \n", count, field.UserID)
+			}
+		}
 	}
-	for _, fieild := range fields2 {
-		fmt.Println(fieild.ID, fieild.UserID, fieild.UserURL)
-	}
-
-
 }
 
 // Функция вставки данных
-func Save(db *sql.DB, user_id string, user_url string) (int, error) {
+func (d DataBase) Save(db *sql.DB, user_id string, user_url string) (int, error) {
 	sqlInsert := `INSERT INTO sources (user_id, user_url) VALUES ($1, $2) RETURNING id`
 	id := 0
 	err := db.QueryRow(sqlInsert, user_id, user_url).Scan(&id)
@@ -55,7 +75,7 @@ func Save(db *sql.DB, user_id string, user_url string) (int, error) {
 }
 
 // Функция запроса данных пользователя из таблицы sources
-func GetAllFieldsOfUser(db *sql.DB, user_id string) ([]Field, error) {
+func (d DataBase) GetAllFieldsOfUserID(db *sql.DB, user_id string) ([]Field, error) {
 	// SQL-запрос для выборки всех пользователей
 	query := "SELECT id, user_id, user_url FROM sources WHERE user_id = $1"
 
@@ -87,26 +107,26 @@ func GetAllFieldsOfUser(db *sql.DB, user_id string) ([]Field, error) {
 }
 
 // Функция удаления данных
-func Delete(db *sql.DB, user_id string) (int64, error) {
+func (d DataBase) Delete(db *sql.DB, user_id string) (int64, error) {
 	// SQL-запрос для удалиеня строки по user_id
 	query := "DELETE FROM sources WHERE user_id = $1"
 
 	// Выполняем запрос
 	result, err := db.Exec(query, user_id)
-    if err != nil {
-        return 0, err
-    }
+	if err != nil {
+		return 0, err
+	}
 	// Получаем количество удалённых строк
-    rowsAffected, err := result.RowsAffected()
-    if err != nil {
-        return 0, err
-    }
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
 
-    return rowsAffected, nil
+	return rowsAffected, nil
 }
 
 // TEST Функция для еденичного запроса данных
-func Get(db *sql.DB, user_id string) (string, string, error) {
+func (d DataBase) GetOneField(db *sql.DB, user_id string) (string, string, error) {
 	var userID string
 	var userURL string
 
@@ -128,7 +148,7 @@ func Get(db *sql.DB, user_id string) (string, string, error) {
 }
 
 // TEST Функция запроса данных всех пользователей из таблицы sources
-func GetAllFields(db *sql.DB) ([]Field, error) {
+func (d DataBase) GetAllFields(db *sql.DB) ([]Field, error) {
 	// SQL-запрос для выборки всех пользователей
 	query := "SELECT id, user_id, user_url FROM sources"
 

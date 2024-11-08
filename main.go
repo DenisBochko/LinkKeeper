@@ -1,201 +1,75 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	db "LinkKeeper/database"
+	"context"
 	"fmt"
-	"log"
-	"net/http"
-	"os"
-
-	"github.com/joho/godotenv"
+	"sync"
+	"time"
 )
 
-// Типы для обработки данных, получаемых от API
-type Chat struct {
-	ID int64 `json:"id"`
+type Field struct {
+	ID      int
+	UserID  string
+	UserURL string
 }
 
-type Message struct {
-	Text string `json:"text"`
-	Chat Chat   `json:"chat"`
-}
-
-type Update struct {
-	UpdateID int     `json:"update_id"`
-	Message  Message `json:"message"`
-}
-
-type Response struct {
-	OK     bool     `json:"ok"`
-	Result []Update `json:"result"`
-}
-
-type User struct {
-	ID        int64  `json:"id"`
-	IsBot     bool   `json:"is_bot"`
-	FirstName string `json:"first_name"`
-}
-
-// типы для создания клавиатуры
-type KeyboardButton struct {
-	Text string `json:"text"`
-}
-
-type ReplyKeyboardMarkup struct {
-	Keyboard        [][]KeyboardButton `json:"keyboard"`
-	ResizeKeyboard  bool               `json:"resize_keyboard"`
-	OneTimeKeyboard bool               `json:"one_time_keyboard"`
-}
-
-// Функция получения токена из переменной окружения
-func getTOKEN() (string, error) {
-	// загружаем переменные окружения
-	if err := godotenv.Load(); err != nil {
-		panic("Ошибка загрузки переменной окружения")
-	}
-	// загружаем токен бота из переменных окружения
-	TOKEN, err := os.LookupEnv("TOKEN")
-	if !err {
-		panic("Ошибка загрузки переменной окружения 'TOKEN'")
-	}
-
-	return TOKEN, nil
-}
-
-// Функция для проверки токена аутентификации бота
-func getMe(APIURL string) (bool, error) {
-	resp, err := http.Get(APIURL + "getMe")
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	var user User
-
-	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
-		return false, err
-	}
-
-	return true, nil
-}
-
-// Функция для получения обновлений
-func getUpdates(offset int, APIURL string) ([]Update, error) {
-	resp, err := http.Get(APIURL + fmt.Sprintf("getUpdates?offset=%d", offset))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var response Response
-	fmt.Println("Отправили get запрос")
-
-	// Декодируем ответ
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, err
-	}
-	if len(response.Result) != 0 {
-		fmt.Println("Текст сообщения:", response.Result[0].Message.Text)
-	}
-	if !response.OK {
-		return nil, fmt.Errorf("error: unable to get updates")
-	}
-
-	return response.Result, nil
-}
-
-// Функция для отправки сообщения
-func sendMessage(chatID int64, text string, replyMarkup interface{}, APIURL string) error {
-	apiURL := APIURL + "sendMessage"
-
-	requestBody := map[string]interface{}{
-		"chat_id":      chatID,
-		"text":         text,
-		"reply_markup": replyMarkup,
-	}
-
-	body, err := json.Marshal(requestBody)
-	if err != nil {
-		return err
-	}
-
-	// Отправляем POST-запрос
-	resp, err := http.Post(apiURL, "application/json", bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	return nil
-}
-
-// Основная функция
 func main() {
-	var offset int
+	ctx, cancel := context.WithCancel(context.Background())
+	wg := sync.WaitGroup{}
 
-	TOKEN, err := getTOKEN()
-	if err != nil {
-		panic(err)
+	sChan := make(chan db.Field, 10)
+	gChan := make(chan db.Field, 10)
+	dChan := make(chan db.Field, 10)
+	rChan := make(chan []db.Field, 10)
+	database := db.DataBase{
+		ConnStr:    "user=postgres dbname=LinkKeeper password=postgres host=localhost sslmode=disable",
+		DriverName: "postgres",
 	}
-	APIURL := "https://api.telegram.org/bot" + TOKEN + "/"
+	wg.Add(1)
+	go func(ctx context.Context, saveChan, getChan, deleteChan <-chan db.Field, receive chan<- []db.Field) {
+		database.Start(ctx, sChan, gChan, dChan, rChan)
+	}(ctx, sChan, gChan, dChan, rChan)
 
-	// Пингуем
-	getMe(APIURL)
+	go func(inChan <-chan []db.Field) {
+		defer wg.Done()
+		Printer(rChan)
+	}(rChan)
+	// sChan <- db.Field{
+	// 	ID:      0,
+	// 	UserID:  "666",
+	// 	UserURL: "https://misha",
+	// }
 
-	for {
-		updates, err := getUpdates(offset, APIURL)
-		if err != nil {
-			log.Println("Error fetching updates:", err)
-			continue
-		}
+	gChan <- db.Field{
+		ID:      0,
+		UserID:  "666",
+		UserURL: "",
+	}
 
-		for _, update := range updates {
-			// Обновляем offset, чтобы не обрабатывать одно и то же сообщение дважды
-			offset = update.UpdateID + 1
+	dChan <- db.Field{
+		ID:      0,
+		UserID:  "666",
+		UserURL: "",
+	}
 
-			chatID := update.Message.Chat.ID
-			text := update.Message.Text
+	gChan <- db.Field{
+		ID:      0,
+		UserID:  "666",
+		UserURL: "",
+	}
+	
 
-			switch text {
-			case "/start":
-				// Reply Keyboard
-				replyKeyboard := ReplyKeyboardMarkup{
-					Keyboard: [][]KeyboardButton{
-						{
-							{"Кнопка 1"},
-							{"Кнопка 2"},
-						},
-						{
-							{"Кнопка 3"},
-						},
-					},
-					ResizeKeyboard:  true,
-					OneTimeKeyboard: true,
-				}
+	time.Sleep(2 * time.Second)
+	cancel()
+	wg.Wait()
+	
+}
 
-				if err := sendMessage(chatID, "Выберите опцию:", replyKeyboard, APIURL); err != nil {
-					log.Println("Error sending message:", err)
-				}
-			default:
-				reply := fmt.Sprintf("Вы сказали: %s", text)
-				replyKeyboard := ReplyKeyboardMarkup{
-					Keyboard: [][]KeyboardButton{
-						{
-							{"Кнопка 1"},
-							{"Кнопка 2"},
-						},
-						{
-							{"Кнопка 3"},
-						},
-					},
-					ResizeKeyboard:  true,
-					OneTimeKeyboard: true,
-				}
-				if err := sendMessage(chatID, reply, replyKeyboard, APIURL); err != nil {
-					log.Println("Error sending message:", err)
-				}
-			}
+func Printer(inChan <-chan []db.Field) {
+	for fields := range inChan {
+		for _, field := range fields {
+			fmt.Printf("ID: %d, UserID: %s, UserURL: %s\n", field.ID, field.UserID, field.UserURL)
 		}
 	}
 }
