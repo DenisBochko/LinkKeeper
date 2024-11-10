@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 
 	_ "github.com/lib/pq"
 )
@@ -14,15 +15,16 @@ type DataBase struct {
 }
 
 type Field struct {
-	ID      int
-	UserID  string
-	UserURL string
+	ID           int
+	UserID       string
+	UserURL      string
+	DeleteNumber int
 }
 
 // connStr := "user=postgres dbname=LinkKeeper password=postgres host=localhost sslmode=disable"
 // driver = "postgres"
 
-func (d DataBase) Start(ctx context.Context, saveChan, getChan, deleteChan <-chan Field, receive chan<- []Field) {
+func (d DataBase) Start(ctx context.Context, saveChan, getChan, deleteChan, deleteOfItemChan <-chan Field, receive chan<- []Field) {
 	db, err := sql.Open(d.DriverName, d.ConnStr)
 	if err != nil {
 		panic(err)
@@ -53,6 +55,13 @@ loop:
 			receive <- fields
 		case field := <-deleteChan:
 			count, err := d.Delete(db, field.UserID)
+			if err != nil {
+				fmt.Printf("database: Не удалось удалить запись пользователя: %s \n", field.UserID)
+			} else {
+				fmt.Printf("database: Удалось удалить %d записей пользователя: %s \n", count, field.UserID)
+			}
+		case field := <-deleteOfItemChan:
+			count, err := d.DeleteOneItem(db, field.UserID, field.DeleteNumber)
 			if err != nil {
 				fmt.Printf("database: Не удалось удалить запись пользователя: %s \n", field.UserID)
 			} else {
@@ -113,6 +122,35 @@ func (d DataBase) Delete(db *sql.DB, user_id string) (int64, error) {
 
 	// Выполняем запрос
 	result, err := db.Exec(query, user_id)
+	if err != nil {
+		return 0, err
+	}
+	// Получаем количество удалённых строк
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	return rowsAffected, nil
+}
+
+// Функция удаления определённого элемента пользователя
+func (d DataBase) DeleteOneItem(db *sql.DB, user_id string, number int) (int64, error) {
+	responseSlice, err := d.GetAllFieldsOfUserID(db, user_id)
+	if err != nil {
+		return 0, err
+	}
+
+	if number > len(responseSlice) || number < 1 {
+		return 0, fmt.Errorf("Нет элемента с таким индексом")
+	}
+	deleteElement := responseSlice[number-1]
+
+	// SQL-запрос для удалиеня строки по user_id
+	query := "DELETE FROM sources WHERE user_id = $1 AND id = $2"
+
+	// Выполняем запрос
+	result, err := db.Exec(query, user_id, strconv.FormatInt(int64(deleteElement.ID), 10))
 	if err != nil {
 		return 0, err
 	}

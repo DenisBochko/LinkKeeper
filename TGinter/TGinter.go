@@ -17,7 +17,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type TGinter struct{
+type TGinter struct {
 	OK bool
 }
 
@@ -59,7 +59,7 @@ type ReplyKeyboardMarkup struct {
 }
 
 // Функция запуска телеграм-интерфейса
-func (t TGinter) Start(ctx context.Context, saveChan, getChan, deleteChan chan<- db.Field, receiveChan <-chan []db.Field) {
+func (t TGinter) Start(ctx context.Context, saveChan, getChan, deleteChan, deleteOfItemChan chan<- db.Field, receiveChan <-chan []db.Field) {
 	offset := 0
 	timeout := 60
 
@@ -94,11 +94,12 @@ loop:
 				replyKeyboard := ReplyKeyboardMarkup{
 					Keyboard: [][]KeyboardButton{
 						{
-							{"/delete"},
-							//{"Кнопка 2"},
+							{"/list"},
+							{"/delete [номер ссылки]"},
 						},
 						{
-							{"/get"},
+							{"/clear"},
+							{"/analyze"},
 						},
 					},
 					ResizeKeyboard:  true,
@@ -107,33 +108,90 @@ loop:
 				// содержит ли text подстроку https://
 				if strings.Contains(text, "https://") {
 					saveChan <- db.Field{
-						ID: 0,
-						UserID: strconv.Itoa(int(chatID)),
-						UserURL: text,
+						ID:           0,
+						UserID:       strconv.Itoa(int(chatID)),
+						UserURL:      text,
+						DeleteNumber: 0,
 					}
-					if err := t.sendMessage(chatID, "Вы успешно сохранили ссылку!", replyKeyboard, APIURL); err != nil {
+					if err := t.sendMessage(chatID, "Вы успешно сохранили ссылку ✅", replyKeyboard, APIURL); err != nil {
 						log.Println("Error sending message:", err)
 					}
-				} else {
-					switch text {
-					case "/delete":
-						deleteChan <- db.Field{
-							ID: 0,
-							UserID: strconv.Itoa(int(chatID)),
-							UserURL: text,
-						}
-						if err := t.sendMessage(chatID, "Вы успешно удалили ваши ссылки!", replyKeyboard, APIURL); err != nil {
+
+				} else if strings.Contains(text, "/delete") {
+					fmt.Println("вызвалась эта функция!", text)
+					message := strings.Split(text, " ")
+					if len(message) <= 1 {
+						if err := t.sendMessage(chatID, "НУЖНО УКАЗАТЬ НОМЕР ВАШЕЙ СЫЛКИ! 🤬", replyKeyboard, APIURL); err != nil {
 							log.Println("Error sending message:", err)
 						}
-					case "/get":
-						getChan <- db.Field{ID: 0, UserID: strconv.Itoa(int(chatID)), UserURL: text}
+					} else {
+						deleteNum, err := strconv.Atoi(message[1])
+						if err != nil {
+							if err := t.sendMessage(chatID, "Нужно указать номер ссылки 😁", replyKeyboard, APIURL); err != nil {
+								log.Println("Error sending message:", err)
+							}
+							continue
+						}
+
+						deleteOfItemChan <- db.Field{
+							ID:           0,
+							UserID:       strconv.Itoa(int(chatID)),
+							UserURL:      text,
+							DeleteNumber: deleteNum,
+						}
+
+						if err := t.sendMessage(chatID, fmt.Sprintf("Успешно удалена ссылка №%d 🗑️", deleteNum), replyKeyboard, APIURL); err != nil {
+							log.Println("Error sending message:", err)
+						}
+					}
+					// остальные случаи
+				} else {
+					switch text {
+					case "/clear":
+						deleteChan <- db.Field{
+							ID:           0,
+							UserID:       strconv.Itoa(int(chatID)),
+							UserURL:      text,
+							DeleteNumber: 0,
+						}
+						if err := t.sendMessage(chatID, "Успешно очищен список ваших ссылок 🗑️", replyKeyboard, APIURL); err != nil {
+							log.Println("Error sending message:", err)
+						}
+					case "/list":
+						getChan <- db.Field{ID: 0,
+							UserID:       strconv.Itoa(int(chatID)),
+							UserURL:      text,
+							DeleteNumber: 0,
+						}
 						select {
 						case fields := <-receiveChan:
-							t.sendMessage(chatID, fmt.Sprint("Вот ваши ссылки: ", fields), replyKeyboard, APIURL)
+							if len(fields) == 0 {
+								t.sendMessage(chatID, "У вас нет сохранённых ссылок 🙄", replyKeyboard, APIURL)
+							} else {
+								t.sendMessage(chatID, "Вот ваши ссылки: 🤩", replyKeyboard, APIURL)
+								for i, field := range fields {
+									t.sendMessage(chatID, fmt.Sprint(i+1, ") ", field.UserURL), replyKeyboard, APIURL)
+								}
+							}
 						case <-time.After(5 * time.Second):
 							t.sendMessage(chatID, "Не удалось получить ссылки, попробуйте позже.", replyKeyboard, APIURL)
 						}
+					case "/start":
+						welcomeMessage := `Привет! 👋
+
+Я — бот, который поможет тебе сохранять ссылки, чтобы ничего важного не потерялось! 📌
+
+Отправляй мне любую ссылку, и я сохраню её для тебя. Ты всегда сможешь вернуться и посмотреть свои сохранённые ссылки, чтобы быстро найти нужную информацию. Также у меня есть удобные команды для управления твоими записями:
+
+- /list — показать все сохранённые ссылки
+- /delete [номер ссылки] — удалить конкретную ссылку
+- /clear — очистить все сохранённые ссылки
+- /analyze - проанализировать ваши ссылки и порекомендовать новые
+
+Надеюсь, что буду полезен!`
+						t.sendMessage(chatID, welcomeMessage, replyKeyboard, APIURL)
 					}
+
 				}
 			}
 		}
@@ -142,32 +200,15 @@ loop:
 
 // Функция получения токена из переменной окружения
 func (t TGinter) getTOKEN() (string, error) {
-    if err := godotenv.Load(); err != nil {
-        return "", fmt.Errorf("ошибка загрузки переменной окружения: %w", err)
-    }
-    TOKEN, exists := os.LookupEnv("TOKEN")
-    if !exists {
-        return "", fmt.Errorf("переменная окружения 'TOKEN' не найдена")
-    }
-    return TOKEN, nil
+	if err := godotenv.Load(); err != nil {
+		return "", fmt.Errorf("ошибка загрузки переменной окружения: %w", err)
+	}
+	TOKEN, exists := os.LookupEnv("TOKEN")
+	if !exists {
+		return "", fmt.Errorf("переменная окружения 'TOKEN' не найдена")
+	}
+	return TOKEN, nil
 }
-
-// Функция для проверки токена аутентификации бота
-// func (t TGinter) getMe(APIURL string) (bool, error) {
-// 	resp, err := http.Get(APIURL + "getMe")
-// 	if err != nil {
-// 		return false, err
-// 	}
-// 	defer resp.Body.Close()
-
-// 	var user User
-
-// 	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
-// 		return false, err
-// 	}
-
-// 	return true, nil
-// }
 
 // Функция для получения обновлений
 func (t TGinter) getUpdates(offset int, timeout int, APIURL string) ([]Update, error) {
