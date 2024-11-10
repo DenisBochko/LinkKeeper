@@ -1,22 +1,22 @@
 package main
 
 import (
+	tg "LinkKeeper/TGinter"
 	db "LinkKeeper/database"
 	"context"
 	"fmt"
-	"sync"
-	"time"
+
+	//"runtime/trace"
+
+	//"sync"
+	//"time"
 )
 
-type Field struct {
-	ID      int
-	UserID  string
-	UserURL string
-}
-
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	wg := sync.WaitGroup{}
+	ctxForDB, cancelDB := context.WithCancel(context.Background())
+	ctxForTG, cancelTG := context.WithCancel(context.Background())
+	is_End := false
+	//wg := sync.WaitGroup{}
 
 	sChan := make(chan db.Field, 10)
 	gChan := make(chan db.Field, 10)
@@ -26,44 +26,22 @@ func main() {
 		ConnStr:    "user=postgres dbname=LinkKeeper password=postgres host=localhost sslmode=disable",
 		DriverName: "postgres",
 	}
-	wg.Add(1)
-	go func(ctx context.Context, saveChan, getChan, deleteChan <-chan db.Field, receive chan<- []db.Field) {
-		database.Start(ctx, sChan, gChan, dChan, rChan)
-	}(ctx, sChan, gChan, dChan, rChan)
 
-	go func(inChan <-chan []db.Field) {
-		defer wg.Done()
-		Printer(rChan)
-	}(rChan)
-	// sChan <- db.Field{
-	// 	ID:      0,
-	// 	UserID:  "666",
-	// 	UserURL: "https://misha",
-	// }
-
-	gChan <- db.Field{
-		ID:      0,
-		UserID:  "666",
-		UserURL: "",
+	TGinter := tg.TGinter{
+		OK: true,
 	}
+	//wg.Add(1)
+	go func(ctx context.Context, saveChan, getChan, deleteChan <-chan db.Field, receiveChan chan<- []db.Field) {
+		database.Start(ctx, saveChan, getChan, deleteChan, receiveChan)
+	}(ctxForDB, sChan, gChan, dChan, rChan)
 
-	dChan <- db.Field{
-		ID:      0,
-		UserID:  "666",
-		UserURL: "",
-	}
+	go func(ctx context.Context, saveChan, getChan, deleteChan chan<- db.Field, receiveChan <-chan []db.Field) {
+		TGinter.Start(ctx, saveChan, getChan, deleteChan, receiveChan)
+	}(ctxForTG, sChan, gChan, dChan, rChan)
 
-	gChan <- db.Field{
-		ID:      0,
-		UserID:  "666",
-		UserURL: "",
-	}
-	
-
-	time.Sleep(2 * time.Second)
-	cancel()
-	wg.Wait()
-	
+	fmt.Scan(&is_End)
+	cancelTG()
+	cancelDB()
 }
 
 func Printer(inChan <-chan []db.Field) {
