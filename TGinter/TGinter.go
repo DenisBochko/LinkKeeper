@@ -13,6 +13,7 @@ import (
 	"time"
 
 	db "LinkKeeper/database"
+	ai "LinkKeeper/analyzer"
 
 	"github.com/joho/godotenv"
 )
@@ -59,7 +60,7 @@ type ReplyKeyboardMarkup struct {
 }
 
 // Функция запуска телеграм-интерфейса
-func (t TGinter) Start(ctx context.Context, saveChan, getChan, deleteChan, deleteOfItemChan chan<- db.Field, receiveChan <-chan []db.Field) {
+func (t TGinter) Start(ctx context.Context, saveChan, getChan, deleteChan, deleteOfItemChan chan<- db.Field, receiveChan <-chan []db.Field, sendAiChan chan<- ai.Field, getAiChan chan<- ai.Field) {
 	offset := 0
 	timeout := 60
 
