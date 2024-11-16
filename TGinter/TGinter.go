@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	db "LinkKeeper/database"
 	ai "LinkKeeper/analyzer"
+	db "LinkKeeper/database"
 
 	"github.com/joho/godotenv"
 )
@@ -60,9 +60,24 @@ type ReplyKeyboardMarkup struct {
 }
 
 // Функция запуска телеграм-интерфейса
-func (t TGinter) Start(ctx context.Context, saveChan, getChan, deleteChan, deleteOfItemChan chan<- db.Field, receiveChan <-chan []db.Field, sendAiChan chan<- ai.Field, getAiChan chan<- ai.Field) {
+func (t TGinter) Start(ctx context.Context, saveChan, getChan, deleteChan, deleteOfItemChan chan<- db.Field, receiveChan <-chan []db.Field, sendAiChan chan<- ai.Field, getAiChan <-chan ai.Field) {
 	offset := 0
 	timeout := 60
+
+	replyKeyboard := ReplyKeyboardMarkup{
+		Keyboard: [][]KeyboardButton{
+			{
+				{"/list"},
+				{"/delete [номер ссылки]"},
+			},
+			{
+				{"/clear"},
+				{"/analyze"},
+			},
+		},
+		ResizeKeyboard:  true,
+		OneTimeKeyboard: true,
+	}
 
 	TOKEN, err := t.getTOKEN()
 	if err != nil {
@@ -72,11 +87,13 @@ func (t TGinter) Start(ctx context.Context, saveChan, getChan, deleteChan, delet
 loop:
 	for {
 		select {
-
 		case <-ctx.Done():
 			fmt.Println("telegramInterface: Отключаем работу TG бота")
 			break loop
-
+		case body := <-getAiChan:
+			if err := t.sendMessage(body.CHATID, body.ResponseText, replyKeyboard, APIURL); err != nil {
+				log.Println("Error sending message:", err)
+			}
 		default:
 			// Пытаемся получить updates
 			updates, err := t.getUpdates(offset, timeout, APIURL)
@@ -177,6 +194,34 @@ loop:
 						case <-time.After(5 * time.Second):
 							t.sendMessage(chatID, "Не удалось получить ссылки, попробуйте позже.", replyKeyboard, APIURL)
 						}
+					case "/analyze":
+						urlsForAi := make([]string, 0, 10)
+
+						getChan <- db.Field{ID: 0,
+							UserID:       strconv.Itoa(int(chatID)),
+							UserURL:      text,
+							DeleteNumber: 0,
+						}
+						select {
+						case fields := <-receiveChan:
+							if len(fields) == 0 {
+								t.sendMessage(chatID, "У вас нет сохранённых ссылок 🙄", replyKeyboard, APIURL)
+							} else {
+								t.sendMessage(chatID, "Начинаю анализ", replyKeyboard, APIURL)
+
+								for _, field := range fields {
+									urlsForAi = append(urlsForAi, field.UserURL)
+								}
+
+								sendAiChan <- ai.Field{
+									CHATID:       chatID,
+									Urls:         urlsForAi,
+									ResponseText: "",
+								}
+							}
+						case <-time.After(5 * time.Second):
+							t.sendMessage(chatID, "Не удалось получить ссылки, попробуйте позже.", replyKeyboard, APIURL)
+						}
 					case "/start":
 						welcomeMessage := `Привет! 👋
 
@@ -192,7 +237,6 @@ loop:
 Надеюсь, что буду полезен!`
 						t.sendMessage(chatID, welcomeMessage, replyKeyboard, APIURL)
 					}
-
 				}
 			}
 		}

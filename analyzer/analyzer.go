@@ -1,4 +1,4 @@
-package main
+package analyzer
 
 import (
 	"bytes"
@@ -11,72 +11,14 @@ import (
 )
 
 type Field struct {
-	chatID       string
-	urls         []string
-	responseText string
+	CHATID       int64
+	Urls         []string
+	ResponseText string
 }
 
 type Analyzer struct {
 	OK bool
 }
-
-// func main() {
-// 	inChan := make(chan Field, 100)
-// 	outChan := make(chan Field, 100)
-// 	ctx, cancel := context.WithCancel(context.Background())
-// 	is_End := false
-
-// 	go func() {
-// 		Printer(outChan)
-// 	}()
-
-// 	go func(ctx context.Context, inputChan <-chan Field, outputChan chan<- Field) {
-// 		start(ctx, inputChan, outputChan)
-// 	}(ctx, inChan, outChan)
-
-// 	inChan <- Field{
-// 		chatID: "123",
-// 		urls: []string{"https://www.youtube.com/watch?v=h5Zwg3Ag-bE&ab_channel=MarkRober",
-// 			"https://www.youtube.com/watch?v=xd30ArXzYLI&t=62s&ab_channel=SuperCrastan",
-// 			"https://www.youtube.com/watch?v=Q2qQo9N9j7Y&ab_channel=sndk"},
-// 		responseText: "",
-// 	}
-
-// 	inChan <- Field{
-// 		chatID: "456",
-// 		urls: []string{"https://practicum.yandex.ru/profile/git-basics/?from=new_landing_git-basics",
-// 			"https://github.com/DenisBochko",
-// 			"https://easyoffer.ru/rating/python_developer"},
-// 		responseText: "",
-// 	}
-
-// 	inChan <- Field{
-// 		chatID: "789",
-// 		urls: []string{"https://www.youtube.com/watch?v=h5Zwg3Ag-bE&ab_channel=MarkRober",
-// 			"https://www.youtube.com/watch?v=xd30ArXzYLI&t=62s&ab_channel=SuperCrastan",
-// 			"https://www.youtube.com/watch?v=Q2qQo9N9j7Y&ab_channel=sndk"},
-// 		responseText: "",
-// 	}
-
-// 	inChan <- Field{
-// 		chatID: "999",
-// 		urls: []string{"https://practicum.yandex.ru/profile/git-basics/?from=new_landing_git-basics",
-// 			"https://github.com/DenisBochko",
-// 			"https://easyoffer.ru/rating/python_developer"},
-// 		responseText: "",
-// 	}
-
-// 	fmt.Scan(&is_End)
-// 	cancel()
-
-// 	// response, err := request([]string{"https://www.youtube.com/watch?v=h5Zwg3Ag-bE&ab_channel=MarkRober",
-// 	// 	"https://www.youtube.com/watch?v=xd30ArXzYLI&t=62s&ab_channel=SuperCrastan",
-// 	// 	"https://www.youtube.com/watch?v=Q2qQo9N9j7Y&ab_channel=sndk"}, "http://localhost:1337/v1/chat/completions")
-// 	// if err != nil {
-// 	// 	fmt.Println(err)
-// 	// }
-// 	// fmt.Println(response)
-// }
 
 func (a Analyzer) Start(ctx context.Context, inputChan <-chan Field, outputChan chan<- Field) error {
 	defer close(outputChan)
@@ -85,8 +27,8 @@ func (a Analyzer) Start(ctx context.Context, inputChan <-chan Field, outputChan 
 	defer close(workerChan)
 
 	go a.worker(workerChan, outputChan, "http://localhost:1337/v1/chat/completions")
-	go a.worker(workerChan, outputChan, "http://localhost:1338/v1/chat/completions")
-	go a.worker(workerChan, outputChan, "http://localhost:1339/v1/chat/completions")
+	// go a.worker(workerChan, outputChan, "http://localhost:1338/v1/chat/completions")
+	// go a.worker(workerChan, outputChan, "http://localhost:1339/v1/chat/completions")
 
 loop:
 	for {
@@ -111,21 +53,21 @@ func (a Analyzer) worker(inputChan <-chan Field, outputChan chan<- Field, hostUr
 			// хуета не работает это потому что я еблан
 			fmt.Print("Превышено время ожидания ответа сервера! (20 секунд)")
 			outputChan <- Field{
-				chatID:       task.chatID,
-				urls:         task.urls,
-				responseText: "Превышено время ожидания ответа сервера! (20 секунд)",
+				CHATID:       task.CHATID,
+				Urls:         task.Urls,
+				ResponseText: "Превышено время ожидания ответа сервера! (20 секунд)",
 			}
 			continue
 		default:
-			response, err := a.request(task.urls, hostUrl)
+			response, err := a.request(task.Urls, hostUrl)
 			if err != nil {
 				fmt.Println(err)
 				return err
 			}
 			outputChan <- Field{
-				chatID:       task.chatID,
-				urls:         task.urls,
-				responseText: response,
+				CHATID:       task.CHATID,
+				Urls:         task.Urls,
+				ResponseText: response,
 			}
 		}
 	}
@@ -202,6 +144,56 @@ func (a Analyzer) request(links []string, url string) (string, error) {
 
 func (a Analyzer) Printer(inputChan chan Field) {
 	for v := range inputChan {
-		fmt.Print(v.chatID, "\n", v.responseText, "\n\n")
+		fmt.Print(v.CHATID, "\n", v.ResponseText, "\n\n")
 	}
 }
+
+// func main() {
+// 	inChan := make(chan Field, 100)
+// 	outChan := make(chan Field, 100)
+// 	ctx, cancel := context.WithCancel(context.Background())
+// 	is_End := false
+
+// 	go func() {
+// 		Printer(outChan)
+// 	}()
+
+// 	go func(ctx context.Context, inputChan <-chan Field, outputChan chan<- Field) {
+// 		start(ctx, inputChan, outputChan)
+// 	}(ctx, inChan, outChan)
+
+// 	inChan <- Field{
+// 		chatID: "456",
+// 		urls: []string{"https://practicum.yandex.ru/profile/git-basics/?from=new_landing_git-basics",
+// 			"https://github.com/DenisBochko",
+// 			"https://easyoffer.ru/rating/python_developer"},
+// 		responseText: "",
+// 	}
+
+// 	inChan <- Field{
+// 		chatID: "789",
+// 		urls: []string{"https://www.youtube.com/watch?v=h5Zwg3Ag-bE&ab_channel=MarkRober",
+// 			"https://www.youtube.com/watch?v=xd30ArXzYLI&t=62s&ab_channel=SuperCrastan",
+// 			"https://www.youtube.com/watch?v=Q2qQo9N9j7Y&ab_channel=sndk"},
+// 		responseText: "",
+// 	}
+
+// 	inChan <- Field{
+// 		chatID: "999",
+// 		urls: []string{"https://practicum.yandex.ru/profile/git-basics/?from=new_landing_git-basics",
+// 			"https://github.com/DenisBochko",
+// 			"https://easyoffer.ru/rating/python_developer"},
+// 		responseText: "",
+// 	}
+
+// 	fmt.Scan(&is_End)
+// 	cancel()
+
+// 	// response, err := request([]string{"https://www.youtube.com/watch?v=h5Zwg3Ag-bE&ab_channel=MarkRober",
+// 	// 	"https://www.youtube.com/watch?v=xd30ArXzYLI&t=62s&ab_channel=SuperCrastan",
+// 	// 	"https://www.youtube.com/watch?v=Q2qQo9N9j7Y&ab_channel=sndk"}, "http://localhost:1337/v1/chat/completions")
+// 	// if err != nil {
+// 	// 	fmt.Println(err)
+// 	// }
+// 	// fmt.Println(response)
+// }
