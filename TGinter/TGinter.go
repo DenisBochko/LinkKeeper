@@ -207,7 +207,7 @@ loop:
 							if len(fields) == 0 {
 								t.sendMessage(chatID, "У вас нет сохранённых ссылок 🙄", replyKeyboard, APIURL)
 							} else {
-								t.sendMessage(chatID, "Начинаю анализ", replyKeyboard, APIURL)
+								t.sendMessage(chatID, "Начинаю анализ (может занять продолжительное время)", replyKeyboard, APIURL)
 
 								for _, field := range fields {
 									urlsForAi = append(urlsForAi, field.UserURL)

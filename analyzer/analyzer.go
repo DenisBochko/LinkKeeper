@@ -27,8 +27,8 @@ func (a Analyzer) Start(ctx context.Context, inputChan <-chan Field, outputChan 
 	defer close(workerChan)
 
 	go a.worker(workerChan, outputChan, "http://localhost:1337/v1/chat/completions")
-	// go a.worker(workerChan, outputChan, "http://localhost:1338/v1/chat/completions")
-	// go a.worker(workerChan, outputChan, "http://localhost:1339/v1/chat/completions")
+	go a.worker(workerChan, outputChan, "http://localhost:1338/v1/chat/completions")
+	go a.worker(workerChan, outputChan, "http://localhost:1339/v1/chat/completions")
 
 loop:
 	for {
@@ -127,7 +127,7 @@ func (a Analyzer) request(links []string, url string) (string, error) {
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "analyzer: Ошибка декодирования", err
 	}
-
+	fmt.Println(result)
 	// Извлекаем значение content
 	if choices, ok := result["choices"].([]interface{}); ok && len(choices) > 0 {
 		if choiceMap, ok := choices[0].(map[string]interface{}); ok {
@@ -147,53 +147,3 @@ func (a Analyzer) Printer(inputChan chan Field) {
 		fmt.Print(v.CHATID, "\n", v.ResponseText, "\n\n")
 	}
 }
-
-// func main() {
-// 	inChan := make(chan Field, 100)
-// 	outChan := make(chan Field, 100)
-// 	ctx, cancel := context.WithCancel(context.Background())
-// 	is_End := false
-
-// 	go func() {
-// 		Printer(outChan)
-// 	}()
-
-// 	go func(ctx context.Context, inputChan <-chan Field, outputChan chan<- Field) {
-// 		start(ctx, inputChan, outputChan)
-// 	}(ctx, inChan, outChan)
-
-// 	inChan <- Field{
-// 		chatID: "456",
-// 		urls: []string{"https://practicum.yandex.ru/profile/git-basics/?from=new_landing_git-basics",
-// 			"https://github.com/DenisBochko",
-// 			"https://easyoffer.ru/rating/python_developer"},
-// 		responseText: "",
-// 	}
-
-// 	inChan <- Field{
-// 		chatID: "789",
-// 		urls: []string{"https://www.youtube.com/watch?v=h5Zwg3Ag-bE&ab_channel=MarkRober",
-// 			"https://www.youtube.com/watch?v=xd30ArXzYLI&t=62s&ab_channel=SuperCrastan",
-// 			"https://www.youtube.com/watch?v=Q2qQo9N9j7Y&ab_channel=sndk"},
-// 		responseText: "",
-// 	}
-
-// 	inChan <- Field{
-// 		chatID: "999",
-// 		urls: []string{"https://practicum.yandex.ru/profile/git-basics/?from=new_landing_git-basics",
-// 			"https://github.com/DenisBochko",
-// 			"https://easyoffer.ru/rating/python_developer"},
-// 		responseText: "",
-// 	}
-
-// 	fmt.Scan(&is_End)
-// 	cancel()
-
-// 	// response, err := request([]string{"https://www.youtube.com/watch?v=h5Zwg3Ag-bE&ab_channel=MarkRober",
-// 	// 	"https://www.youtube.com/watch?v=xd30ArXzYLI&t=62s&ab_channel=SuperCrastan",
-// 	// 	"https://www.youtube.com/watch?v=Q2qQo9N9j7Y&ab_channel=sndk"}, "http://localhost:1337/v1/chat/completions")
-// 	// if err != nil {
-// 	// 	fmt.Println(err)
-// 	// }
-// 	// fmt.Println(response)
-// }
