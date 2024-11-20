@@ -1,6 +1,20 @@
 ﻿# LinkKeeper
----
-<code>git clone https://github.com/DenisBochko/LinkKeeper.git</code>
+
+LinkKeeper - телеграм-бот, написанный на golang, для сохранения, управления и анализа ссылок.
+
+## Используемые технологии
+1. Golang
+2. Python
+3. PostreSQL
+4. Docker
+5. Telegram Bot API
+
+## Архитектура приложения
+
+![Не загрузилось(](/image.png "Архитектура")
+
+## Локальный запуск
+```git clone https://github.com/DenisBochko/LinkKeeper.git```
 ---
 .env берём из примера .env.example вставляем тг токен
 <code>echo TOKEN=<ВАШ ТОКЕН> > .env</code>
