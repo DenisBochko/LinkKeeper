@@ -17,8 +17,8 @@ LinkKeeper - телеграм-бот, написанный на golang, для �
 
 1. Клонируем проект 
 - ```
-git clone https://github.com/DenisBochko/LinkKeeper.git
-```
+  git clone https://github.com/DenisBochko/LinkKeeper.git
+  ```
 2. Переходим в директорию LinkKeeper и создаём .env по образцу 
 - ```
   cd LinkKeeper
