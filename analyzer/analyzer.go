@@ -27,8 +27,8 @@ func (a Analyzer) Start(ctx context.Context, inputChan <-chan Field, outputChan 
 	defer close(workerChan)
 
 	go a.worker(workerChan, outputChan, "http://localhost:1337/v1/chat/completions")
-	go a.worker(workerChan, outputChan, "http://localhost:1338/v1/chat/completions")
-	go a.worker(workerChan, outputChan, "http://localhost:1339/v1/chat/completions")
+	// go a.worker(workerChan, outputChan, "http://localhost:1338/v1/chat/completions")
+	// go a.worker(workerChan, outputChan, "http://localhost:1339/v1/chat/completions")
 
 loop:
 	for {
@@ -43,7 +43,6 @@ loop:
 	return nil
 }
 
-// host: http://localhost:1337/v1/chat/completions
 func (a Analyzer) worker(inputChan <-chan Field, outputChan chan<- Field, hostUrl string) error {
 	defer close(outputChan)
 	for task := range inputChan {

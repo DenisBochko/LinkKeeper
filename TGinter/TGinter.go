@@ -125,14 +125,33 @@ loop:
 				}
 				// содержит ли text подстроку https://
 				if strings.Contains(text, "https://") {
-					saveChan <- db.Field{
-						ID:           0,
-						UserID:       strconv.Itoa(int(chatID)),
-						UserURL:      text,
-						DeleteNumber: 0,
-					}
-					if err := t.sendMessage(chatID, "Вы успешно сохранили ссылку ✅", replyKeyboard, APIURL); err != nil {
-						log.Println("Error sending message:", err)
+					// если ссылка одна, то просто посылаем её в канал сохранения
+					if strings.Count(text, "https://") == 1 {
+						saveChan <- db.Field{
+							ID:           0,
+							UserID:       strconv.Itoa(int(chatID)),
+							UserURL:      text,
+							DeleteNumber: 0,
+						}
+						if err := t.sendMessage(chatID, "Вы успешно сохранили ссылку ✅", replyKeyboard, APIURL); err != nil {
+							log.Println("Error sending message:", err)
+						}
+					} else {
+						fmt.Println("Много ссылок")
+						queueURL := make([]string, 0, 20)
+						queueURL = strings.Split(text, "\n")
+						fmt.Println(queueURL)
+						for _, link := range queueURL {
+							saveChan <- db.Field{
+								ID:           0,
+								UserID:       strconv.Itoa(int(chatID)),
+								UserURL:      link,
+								DeleteNumber: 0,
+							}
+						}
+						if err := t.sendMessage(chatID, "Вы успешно сохранили несколько ссылок ✅", replyKeyboard, APIURL); err != nil {
+							log.Println("Error sending message:", err)
+						}
 					}
 
 				} else if strings.Contains(text, "/delete") {
